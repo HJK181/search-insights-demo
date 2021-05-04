@@ -1,6 +1,7 @@
 package com.example.searchinsightsdemo.rest;
 
 import java.io.IOException;
+import java.net.URL;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -60,6 +61,12 @@ public class FileController {
 	public ResponseEntity<String> csvToParquet(@PathVariable String filename) {
 		Path path = fileService.csvToParquet(filename);
 		return ResponseEntity.ok(MvcUriComponentsBuilder.fromMethodName(FileController.class, "serveFile", path.getFileName().toString()).build().toString());
+	}
+	
+	@PatchMapping("/s3/{filename:.+}")
+	@ResponseBody
+	public URL uploadToS3(@PathVariable String filename) {
+		return fileService.uploadToS3(filename);
 	}
 
 	@ExceptionHandler(StorageFileNotFoundException.class)

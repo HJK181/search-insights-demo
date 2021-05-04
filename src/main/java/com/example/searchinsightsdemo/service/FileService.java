@@ -5,10 +5,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -25,6 +29,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.amazonaws.SdkClientException;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.example.searchinsightsdemo.config.ApplicationProperties;
 import com.example.searchinsightsdemo.parquet.CsvParquetWriter;
 
@@ -149,6 +156,27 @@ public class FileService {
 		}
 		catch (IOException e) {
 			throw new StorageFileNotFoundException("Schema file does not exist for the given csv file, did you forget to upload it?", e);
+		}
+	}
+
+	public URL uploadToS3(String filename) {
+		Resource parquetFile = loadAsResource(filename);
+		if (!parquetFile.getFilename().endsWith(".parquet")) {
+			throw new StorageException("You must upload parquet files to S3!");
+		}
+		try {
+			AmazonS3 s3 = AmazonS3ClientBuilder.standard().build();
+			File file = parquetFile.getFile();
+			long lastModified = file.lastModified();
+			LocalDate partitionDate = Instant.ofEpochMilli(lastModified)
+					.atZone(ZoneId.systemDefault())
+					.toLocalDate();
+			String bucket = String.format("search-insights-demo/dt=%s", partitionDate.toString());
+			s3.putObject(bucket, "analytics.parquet", file);
+			return s3.getUrl(bucket, "analytics.parquet");
+		}
+		catch (SdkClientException | IOException e) {
+			throw new StorageException("Failed to upload file to s3", e);
 		}
 	}
 }
