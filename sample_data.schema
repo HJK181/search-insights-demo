@@ -1,0 +1,6 @@
+message m { 
+    required binary query; 
+    required INT64 searches; 
+    required INT64 clicks; 
+    required INT64 transactions; 
+}

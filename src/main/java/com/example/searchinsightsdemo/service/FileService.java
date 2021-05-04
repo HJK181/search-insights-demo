@@ -1,14 +1,24 @@
 package com.example.searchinsightsdemo.service;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.stream.Stream;
 
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.MessageTypeParser;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
@@ -16,6 +26,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.example.searchinsightsdemo.config.ApplicationProperties;
+import com.example.searchinsightsdemo.parquet.CsvParquetWriter;
 
 @Service
 public class FileService {
@@ -87,6 +98,57 @@ public class FileService {
 		}
 		catch (IOException e) {
 			throw new StorageException("Could not initialize storage", e);
+		}
+	}
+
+	public Path csvToParquet(String filename) {
+		Resource csvResource = loadAsResource(filename);
+		String outputName = getFilenameWithDiffExt(csvResource, ".parquet");
+		String rawSchema = getSchema(csvResource);
+		Path outputParquetFile = uploadLocation.resolve(outputName);
+		if (Files.exists(outputParquetFile)) {
+			throw new StorageException("Output file " + outputName + " already exists");
+		}
+
+		org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(outputParquetFile.toUri());
+		MessageType schema = MessageTypeParser.parseMessageType(rawSchema);
+		try (
+				CSVParser csvParser = CSVFormat.DEFAULT
+						.withFirstRecordAsHeader()
+						.parse(new InputStreamReader(csvResource.getInputStream()));
+				CsvParquetWriter writer = new CsvParquetWriter(path, schema, false);
+		) {
+			for (CSVRecord record : csvParser) {
+				List<String> values = new ArrayList<String>();
+				Iterator<String> iterator = record.iterator();
+				while (iterator.hasNext()) {
+					values.add(iterator.next());
+				}
+				writer.write(values);
+			}
+		}
+		catch (IOException e) {
+			throw new StorageFileNotFoundException("Could not read file: " + filename);
+		}
+
+		return outputParquetFile;
+	}
+
+	private String getFilenameWithDiffExt(Resource csvResource, String ext) {
+		String outputName = csvResource.getFilename()
+				.substring(0, csvResource.getFilename().length() - ".csv".length()) + ext;
+		return outputName;
+	}
+
+	private String getSchema(Resource csvResource) {
+		try {
+			String fileName = getFilenameWithDiffExt(csvResource, ".schema");
+			File csvFile = csvResource.getFile();
+			File schemaFile = new File(csvFile.getParentFile(), fileName);
+			return Files.readString(schemaFile.toPath());
+		}
+		catch (IOException e) {
+			throw new StorageFileNotFoundException("Schema file does not exist for the given csv file, did you forget to upload it?", e);
 		}
 	}
 }
