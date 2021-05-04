@@ -1,5 +1,7 @@
 package com.example.searchinsightsdemo.service;
 
+import static com.example.searchinsightsdemo.db.Tables.ANALYTICS;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,6 +25,8 @@ import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.MessageTypeParser;
+import org.jooq.DSLContext;
+import org.jooq.exception.DataAccessException;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
@@ -38,10 +42,14 @@ import com.example.searchinsightsdemo.parquet.CsvParquetWriter;
 @Service
 public class FileService {
 
-	private final Path uploadLocation;
+	private static final String QUERY_REPAIR_TABLE = "MSCK REPAIR TABLE " + ANALYTICS.getName();
 
-	public FileService(ApplicationProperties properties) {
+	private final Path			uploadLocation;
+	private final DSLContext	context;
+
+	public FileService(ApplicationProperties properties, DSLContext context) {
 		this.uploadLocation = Paths.get(properties.getStorageConfiguration().getUploadDir());
+		this.context = context;
 	}
 
 	public Path store(MultipartFile file) {
@@ -173,9 +181,13 @@ public class FileService {
 					.toLocalDate();
 			String bucket = String.format("search-insights-demo/dt=%s", partitionDate.toString());
 			s3.putObject(bucket, "analytics.parquet", file);
+
+			// Athena does not scan for newly updated files, instead we need to
+			// execute a repair table statement
+			context.execute(QUERY_REPAIR_TABLE);
 			return s3.getUrl(bucket, "analytics.parquet");
 		}
-		catch (SdkClientException | IOException e) {
+		catch (SdkClientException | IOException | DataAccessException e) {
 			throw new StorageException("Failed to upload file to s3", e);
 		}
 	}
