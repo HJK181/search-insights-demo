@@ -22,3 +22,11 @@ curl -s -XPATCH http://localhost:8080/csv/convert/sample_data.csv
 
 ## Upload the parquet file to S3
 curl -s -XPATCH http://localhost:8080/csv/s3/sample_data.parquet
+
+# Create random data for the last X days
+curl -s localhost:8080/csv/randomize/{X}
+
+# GET the CR. Please adjust from and to accordingly
+curl -s "localhost:8080/insights/cr?from=2021-10-04&to=2021-10-11"
+# GET the CTR. Please adjust from and to accordingly
+curl -s "localhost:8080/insights/ctr?from=2021-10-04&to=2021-10-11"

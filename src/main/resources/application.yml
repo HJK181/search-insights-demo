@@ -2,10 +2,14 @@ logging:
   level:
     org.jooq: DEBUG
 
+
 spring:
   datasource:
     url: jdbc:awsathena://athena.eu-central-1.amazonaws.com:443;S3OutputLocation=s3://athena-demo-qr;Schema=demo
     username: ${ATHENA_USER}
     password: ${ATHENA_SECRET}
     driver-class-name: com.simba.athena.jdbc.Driver
+  jooq:
+    sql-dialect: MYSQL
+    
     

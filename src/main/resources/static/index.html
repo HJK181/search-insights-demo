@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>DIY Site search analytics</title>
+<style>
+.main-container {
+	display: flex;
+	justify-content: space-between;
+}
+
+.chart-container {
+	height: 400px;
+	flex: 0 0 auto;
+	width: 50%;
+}
+</style>
+</head>
+<script
+	src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.5.1/chart.min.js"
+	integrity="sha512-Wt1bJGtlnMtGP0dqNFH1xlkLBNpEodaiQ8ZN5JLA5wpc1sUlk/O5uuOMNgvzddzkpvZ9GLyYNa8w2s7rqiTk5Q=="
+	crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<body>
+	<p>
+		From: <input type="text" id="from" placeholder="2021-10-04">
+		To: <input type="text" id="to" placeholder="2021-10-11">
+	</p>
+	<button onclick="loadData('cr', 'chart-1')">Load CR</button>
+	<button onclick="loadData('ctr', 'chart-2')">Load CTR</button>
+	<div class="main-container">
+		<div class="chart-container">
+			<canvas id="chart-1"></canvas>
+		</div>
+		<div class="chart-container">
+			<canvas id="chart-2"></canvas>
+		</div>
+	</div>
+	<script>
+		function reAddCanvas(id) {
+			const canvas = document.getElementById(id);
+			const parent = canvas.parentElement;
+			canvas.remove();
+			const newCanvas = document.createElement("canvas");
+			newCanvas.setAttribute("id", id);
+			parent.append(newCanvas);
+		}
+	
+		function loadData(kpi, id) {
+			const from = document.getElementById("from").value;
+			const to = document.getElementById("to").value;
+			
+			if (!from || !to) {
+				alert("Please specify a from and to date!");
+				return;
+			}
+			
+			fetch(`http://localhost:8080/insights/${kpi}?from=${from}&to=${to}`)
+				.then(res => res.json())
+				.then(chartData => {
+					reAddCanvas(id);
+					const ctx = document.getElementById(id).getContext('2d');
+					var myChart = new Chart(ctx,
+							{
+								type : 'line',
+								data : {
+									labels : chartData.labels,
+									datasets: [{
+									    label: kpi,
+									    data: chartData.data,
+									    fill: false,
+									    borderColor: 'rgb(75, 192, 192)',
+									    tension: 0.1
+									  }],
+								},
+								options : {
+									responsive: true,
+									scales : {
+										yaxis: {
+											  forceNiceScale: false,
+											  max: 100,
+											  labels: {
+											    formatter: (value) => value.toFixed(0) +'%',
+											  },
+											}
+									}
+								}
+							});
+				})
+				.catch((error) => {
+					console.error('Error:', error);
+				});
+		}
+	</script>
+</body>
+</html>

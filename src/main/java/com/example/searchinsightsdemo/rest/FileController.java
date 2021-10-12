@@ -68,6 +68,12 @@ public class FileController {
 	public URL uploadToS3(@PathVariable String filename) {
 		return fileService.uploadToS3(filename);
 	}
+	
+	@GetMapping("/randomize/{numDays}")
+	@ResponseBody
+	public List<URL> randomize(@PathVariable int numDays) {
+		return fileService.createRandomData(numDays);
+	}
 
 	@ExceptionHandler(StorageFileNotFoundException.class)
 	public ResponseEntity<?> handleStorageFileNotFound(StorageFileNotFoundException exc) {

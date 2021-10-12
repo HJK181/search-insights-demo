@@ -16,8 +16,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Random;
 import java.util.stream.Stream;
 
 import org.apache.commons.csv.CSVFormat;
@@ -189,6 +191,62 @@ public class FileService {
 		}
 		catch (SdkClientException | IOException | DataAccessException e) {
 			throw new StorageException("Failed to upload file to s3", e);
+		}
+	}
+
+	public List<URL> createRandomData(int numberOfDays) {
+		List<String> queries = new ArrayList<>(List.of("dress", "shoes", "jeans", "dress red", "jacket", "shoes women", "t-shirt black", "tshirt", "shirt", "hoodie"));
+		String rawSchema = getSchemaFromRootDir();
+		MessageType schema = MessageTypeParser.parseMessageType(rawSchema);
+
+		LocalDate now = LocalDate.now();
+		Random random = new Random();
+		AmazonS3 s3 = AmazonS3ClientBuilder.standard().build();
+		List<URL> uploadUrls = new ArrayList<>(numberOfDays);
+
+		for (int i = 0; i < numberOfDays; i++) {
+			Collections.shuffle(queries);
+			Path tempFile = createTempDir().resolve("analytics" + String.valueOf(i) + ".parquet");
+			org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path(tempFile.toUri());
+			try (
+					CsvParquetWriter writer = new CsvParquetWriter(path, schema, false);
+			) {
+				for (String query : queries) {
+					Integer searches = random.nextInt(100);
+					Double ctrBound = 0.3 * searches;
+					Integer clicks = ctrBound.intValue() == 0 ? 0 : random.nextInt(ctrBound.intValue());
+					Double transactionsBound = 0.1 * searches;
+					Integer transactions = transactionsBound.intValue() == 0 ? 0 : random.nextInt(transactionsBound.intValue());
+					List<String> values = List.of(query, searches.toString(), clicks.toString(), transactions.toString());
+					writer.write(values);
+				}
+			}
+			catch (IOException e) {
+				throw new StorageFileNotFoundException("Could not create random data", e);
+			}
+			String bucket = String.format("search-insights-demo/dt=%s", now.minusDays(i).toString());
+			s3.putObject(bucket, "analytics.parquet", tempFile.toFile());
+			uploadUrls.add(s3.getUrl(bucket, "analytics.parquet"));
+		}
+		context.execute(QUERY_REPAIR_TABLE);
+		return uploadUrls;
+	}
+
+	private String getSchemaFromRootDir() {
+		try {
+			return Files.readString(Paths.get(".").resolve("sample_data.schema"));
+		}
+		catch (IOException e) {
+			throw new StorageFileNotFoundException("Schema file on root directory does not exists, did you delete it?", e);
+		}
+	}
+
+	private Path createTempDir() {
+		try {
+			return Files.createTempDirectory("random_data");
+		}
+		catch (IOException e) {
+			throw new StorageException("Failed to create temp file", e);
 		}
 	}
 }
